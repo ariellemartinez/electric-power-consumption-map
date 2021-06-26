@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Electric power consumption | World101</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+<script src="https://api.mapbox.com/mapbox.js/v3.3.1/mapbox.js"></script>
+<link href="https://api.mapbox.com/mapbox.js/v3.3.1/mapbox.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-1.12.4.js"></script> 
+<script src="https://code.highcharts.com/highcharts.js"></script> 
+<script src="https://code.highcharts.com/modules/exporting.js"></script> 
+<script src="https://code.highcharts.com/modules/no-data-to-display.js"></script> 
+<script src="https://d3js.org/d3.v5.min.js"></script> 
+<script src="https://world101.cfr.org/themes/custom/world101_bootstrap/components/asset-map-chart/chart/vendors/highchart-cfr-theme.js"></script>
+<style>
+body {
+    margin: 0;
+    padding: 0;
+}
+#map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+}
+.info {
+    padding: 10px;
+    font: 15px "Helvetica Neue", Arial, Helvetica, sans-serif;
+    background: white;
+    border-radius: 3px;
+    z-index: 800;
+    width: auto;
+    height: auto;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    line-height: 18px;
+}
+.info h4, .info p {
+    margin: 0 0 10px;
+    color: rgba(0,0,0,.75);
+}
+.legend {
+    line-height: 18px;
+    color: rgba(0,0,0,.75);
+}
+.legend i {
+    width: 18px;
+    height: 18px;
+    float: left;
+    margin-right: 8px;
+    opacity: 0.7;
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="info" class="info">
+  <div id="details">
+    <h4 style="margin-bottom: 0">Click on a country</h4>
+  </div>
+  <div id="chart"></div>
+</div>
+<div id="legend" style="display:none;">
+  <h4>Annual electric power consumption<br />
+    (billions of kWh)</h4>
+  <nav class="legend"> <i style="background:#EDF8FB"></i> 0&ndash;5<br />
+    <i style="background:#B2E2E2"></i> 5&ndash;10<br />
+    <i style="background:#66C2A4"></i> 10&ndash;50<br />
+    <i style="background:#2CA25F"></i> 50&ndash;100<br />
+    <i style="background:#006D2C"></i> 100+<br />
+  </nav>
+</div>
+<script type="text/javascript" src="countries.js"></script> 
+<script>
+	
+L.mapbox.accessToken = "pk.eyJ1Ijoid2VibWFzdGVyY2ZyIiwiYSI6ImNsT2lZNU0ifQ.uufuabBAFtq7dOpW0Lzd5w";
+
+var mapboxTiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "Imagery &copy; <a href='https://www.openstreetmap.org/copyright' target='_blank'>OpenStreetMap contributors</a>, Boundaries &copy; <a href='https://www.naturalearthdata.com/' target='_blank'>Natural Earth</a>, Data &copy; World Bank"
+});
+
+var map = L.map("map")
+  .addLayer(mapboxTiles)
+  .setView([0, 0], 2);
+
+var countriesLayer = L.mapbox.featureLayer().addTo(map);
+
+var choroplethLegend = L.mapbox.legendControl({
+  position: "bottomleft"
+}).addLegend(document.getElementById("legend").innerHTML).addTo(map);
+
+window.onload = loadData();
+
+function loadData() {
+  $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.USE.ELEC.KH.PC?format=json&mrv=1&per_page=300")
+    .done(function (consumptionData) {
+
+      var year = consumptionData[1][0]["date"];
+
+      $.getJSON("https://api.worldbank.org/v2/country/all/indicator/SP.POP.TOTL?format=json&date=" + year + "&per_page=300")
+        .done(function (populationData) {
+          $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.ELC.COAL.ZS?format=json&date=" + year + "&per_page=300")
+            .done(function (coalData) {
+              $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.ELC.HYRO.ZS?format=json&date=" + year + "&per_page=300")
+                .done(function (hydroelectricData) {
+                  $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.ELC.NGAS.ZS?format=json&date=" + year + "&per_page=300")
+                    .done(function (naturalGasData) {
+                      $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.ELC.NUCL.ZS?format=json&date=" + year + "&per_page=300")
+                        .done(function (nuclearData) {
+                          $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.ELC.PETR.ZS?format=json&date=" + year + "&per_page=300")
+                            .done(function (oilData) {
+                              $.getJSON("https://api.worldbank.org/v2/country/all/indicator/EG.ELC.RNWX.ZS?format=json&date=" + year + "&per_page=300")
+                                .done(function (renewableData) {
+
+                                  var consumptionHash = consumptionData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : item.value.toFixed(2)
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var populationHash = populationData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : item.value.toFixed(2)
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var coalHash = coalData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : Number(item.value.toFixed(2))
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var hydroelectricHash = hydroelectricData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : Number(item.value.toFixed(2))
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var naturalGasHash = naturalGasData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : Number(item.value.toFixed(2))
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var nuclearHash = nuclearData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : Number(item.value.toFixed(2))
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var oilHash = oilData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : Number(item.value.toFixed(2))
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  var renewableHash = renewableData[1].reduce(function (hash, item) {
+                                    if (item.countryiso3code) {
+                                      hash[item.countryiso3code] = (item.value == null) ? null : Number(item.value.toFixed(2))
+                                    }
+                                    return hash
+                                  }, {});
+
+                                  countriesData.features.forEach(function (item) {
+
+                                    var product = consumptionHash[item.properties.iso_a3] * populationHash[item.properties.iso_a3];
+
+                                    item.properties.consumption = (consumptionHash[item.properties.iso_a3] == null || populationHash[item.properties.iso_a3] == null) ? "No data available" : product.toFixed(2);
+
+                                    item.properties.coal = coalHash[item.properties.iso_a3];
+
+                                    item.properties.hydroelectric = hydroelectricHash[item.properties.iso_a3];
+
+                                    item.properties.naturalgas = naturalGasHash[item.properties.iso_a3];
+
+                                    item.properties.nuclear = nuclearHash[item.properties.iso_a3];
+
+                                    item.properties.oil = oilHash[item.properties.iso_a3];
+
+                                    item.properties.renewable = renewableHash[item.properties.iso_a3];
+
+                                    item.properties.year = year;
+
+                                  });
+
+                                  countriesLayer.setGeoJSON(countriesData);
+
+                                  countriesLayer.eachLayer(function (layer) {
+
+                                    layer.setStyle({
+                                      fillColor: getColor(layer.feature.properties.consumption),
+                                      fillOpacity: 0.7,
+                                      weight: 1,
+                                      opacity: 1,
+                                      color: "white"
+                                    });
+
+                                    layer.on({
+                                      click: displayInfo
+                                    });
+
+                                  });
+
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
+function displayInfo(e) {
+
+  var properties = e.target.feature.properties;
+
+  document.getElementById("details").innerHTML = "<h4>Country</h4><p>" + properties.name_en + "</p><h4>Electric power consumption, " + properties.year + " (kWh)</h4><p>" + numberWithCommas(properties.consumption) + "</p><h4>Electricity production by source, " + properties.year + "</h4>";
+
+  if (!properties.coal && !properties.hydroelectric && !properties.naturalgas && !properties.nuclear && !properties.oil && !properties.renewable) {
+    document.getElementById("chart").innerHTML = "<p>No data available</p>";
+  } else {
+    Highcharts.chart("chart", {
+      chart: {
+        type: "pie"
+      },
+      title: {
+        text: ""
+      },
+      plotOptions: {
+        pie: {
+          dataLabels: {
+            enabled: false
+          },
+          showInLegend: true
+        }
+      },
+      series: [{
+        name: "Percentage of total",
+        data: [{
+          name: "Coal",
+          y: properties.coal
+        }, {
+          name: "Hydroelectric",
+          y: properties.hydroelectric
+        }, {
+          name: "Natural Gas",
+          y: properties.naturalgas
+        }, {
+          name: "Nuclear",
+          y: properties.nuclear
+        }, {
+          name: "Oil",
+          y: properties.oil
+        }, {
+          name: "Renewable (excluding hydroelectic)",
+          y: properties.renewable
+        }]
+      }]
+    });
+  }
+
+}
+
+function getColor(d) {
+  return d > 100000000000 ? "#006D2C"
+    : d > 50000000000 ? "#2CA25F"
+    : d > 10000000000 ? "#66C2A4"
+    : d > 5000000000 ? "#B2E2E2"
+    : d >= 0 ? "#EDF8FB"
+    : "#9BAAAA";
+}
+
+function numberWithCommas(x) {
+  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+</script>
+</body>
+</html>
